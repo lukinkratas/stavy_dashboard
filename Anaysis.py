@@ -9,7 +9,10 @@ import io
 from dotenv import load_dotenv
 
 load_dotenv()
+
 s3_client = boto3.client('s3')
+
+BUCKET_NAME = 'stavy'
 
 # TODO:
 # [ ] add parquet table
@@ -18,14 +21,30 @@ s3_client = boto3.client('s3')
 # [ ] files to cloud
 # [ ] add logging?
 
+def list_s3_files():
+
+    # Get object from S3
+    response = s3_client.list_objects_v2(
+        Bucket=BUCKET_NAME,
+        MaxKeys=1,
+        ContinuationToken='string',
+    )
+
+    if response.get('NextContinuationToken'):
+        pass
+    
+    contents = response['Contents']
+
 def fetch_data():
 
-    bucket_name = 'stavy'
     key = 'data.csv'
 
     try:
         # Get object from S3
-        response = s3_client.get_object(Bucket=bucket_name, Key=key)
+        response = s3_client.get_object(
+            Bucket=BUCKET_NAME,
+            Key=key
+        )
         
         # Read the CSV data from the response
         csv_bytes = response['Body'].read().decode('utf-8')

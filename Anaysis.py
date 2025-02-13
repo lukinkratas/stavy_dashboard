@@ -9,6 +9,7 @@ import plotly.graph_objects as go
 # [ ] add parquet table
 # [ ] change bar width in diffs graphs
 # [ ] refactor
+# [ ] files to cloud
 
 def main():
 

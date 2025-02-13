@@ -4,12 +4,41 @@ import os
 from datetime import datetime
 # import plotly.express as px
 import plotly.graph_objects as go
+import boto3
+import io
+from dotenv import load_dotenv
+
+load_dotenv()
+s3_client = boto3.client('s3')
 
 # TODO:
 # [ ] add parquet table
 # [ ] change bar width in diffs graphs
 # [ ] refactor
 # [ ] files to cloud
+# [ ] add logging?
+
+def fetch_data():
+
+    bucket_name = 'stavy'
+    key = 'data.csv'
+
+    try:
+        # Get object from S3
+        response = s3_client.get_object(Bucket=bucket_name, Key=key)
+        
+        # Read the CSV data from the response
+        csv_bytes = response['Body'].read().decode('utf-8')
+        df = pd.read_csv(io.StringIO(csv_bytes))
+        
+        print(f"Successfully read CSV from S3. Shape: {df.shape}")
+        
+    except Exception as e:
+        print(f"Error reading CSV from S3: {str(e)}")
+
+    else:
+        return df
+
 
 def main():
 

@@ -1,45 +1,57 @@
 import pandas as pd
 import streamlit as st
-import os
 from datetime import datetime
 # import plotly.express as px
 import plotly.graph_objects as go
+from custom_utils import list_s3_csvs, fetch_csv, transform_df
 
 # TODO:
 # [ ] add parquet table
 # [ ] change bar width in diffs graphs
 # [ ] refactor
+# [x] files to cloud
+# [ ] add logging?
+
+def get_diff_df(df):
+    diff_df = df.diff()
+
+    # replace negative values with zeros
+    num_df = diff_df._get_numeric_data()
+    num_df[num_df < 0] = 0
+
+    diff_df['datum'] = df['datum']
+
+    return diff_df
+
+def get_avg_df(diff_df):
+    return diff_df.groupby(diff_df.datum.dt.year).mean().drop(columns='datum')
 
 def main():
 
     st.set_page_config(layout="wide")
     st.title('Stavy')
 
-    if os.path.isdir('data'):
-        data_files = os.listdir('data')
-        if not data_files:            
-            st.write('Files in data directory not found.')
-            return
+    csvs = list_s3_csvs()
 
-    if filename := st.selectbox('Select File', data_files):
+    if not csvs:
+        st.write('Files in data directory not found.')
+        return
+
+    if filename := st.selectbox('Select File', csvs):
         col1, col2, col3 = st.columns(3)
 
-        col1.header(f'{filename} - Absolute')
-        df = pd.read_csv(os.path.join('data', filename), index_col=False)
-        df['datum'] = pd.to_datetime(df['datum'])
+        col1.header(f'{filename.capitalize()} - Absolute')
+        df = fetch_csv(filename)
+        df = transform_df(df)
         min_dt = df['datum'].min()
         col1.dataframe(df)
 
         col2.header('Diffs')
-        diff_df = df.diff()
-        num_df = diff_df._get_numeric_data()
-        num_df[num_df < 0] = 0 # replace negative values with zeros
-        diff_df['datum'] = df['datum']
+        diff_df = get_diff_df(df)
         col2.dataframe(diff_df)
 
         col3.header('Avg Diff')
-        avg_df = diff_df.groupby(diff_df.datum.dt.year).mean()  
-        avg_df = avg_df.drop(columns='datum')
+        avg_df = get_avg_df(diff_df)
         col3.dataframe(avg_df)
 
         for col in df.columns:
@@ -56,7 +68,7 @@ def main():
                     )
                 ])
                 fig.update_layout(
-                    title_text=col,
+                    title_text=f'{col.capitalize()} - Absolute',
                     autosize=False,
                     width=400,
                     height=400
@@ -88,7 +100,7 @@ def main():
                     )
                 ])
                 fig.update_layout(
-                    title_text=col,
+                    title_text=f'{col.capitalize()} - Diffs',
                     autosize=False,
                     width=400,
                     height=400,

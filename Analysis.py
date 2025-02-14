@@ -3,49 +3,14 @@ import streamlit as st
 from datetime import datetime
 # import plotly.express as px
 import plotly.graph_objects as go
-import boto3
-import io
-from dotenv import load_dotenv
-
-load_dotenv()
-
-s3_client = boto3.client('s3')
-
-BUCKET_NAME = 'stavy'
+from custom_utils import list_s3_csvs, fetch_csv, transform_df
 
 # TODO:
 # [ ] add parquet table
 # [ ] change bar width in diffs graphs
 # [ ] refactor
-# [ ] files to cloud
+# [x] files to cloud
 # [ ] add logging?
-
-def list_s3_csvs():
-
-    # Get object from S3
-    response = s3_client.list_objects_v2(
-        Bucket=BUCKET_NAME,
-        MaxKeys=1,
-    )
-    
-    contents = response['Contents']
-    return [content['Key'] for content in contents if content['Key'].endswith('.csv')]
-
-def fetch_csv(filename):
-
-    # Get object from S3
-    response = s3_client.get_object(
-        Bucket=BUCKET_NAME,
-        Key=filename
-    )
-    
-    # Read the CSV data from the response
-    csv_bytes = response['Body'].read().decode('utf-8')
-    return pd.read_csv(io.StringIO(csv_bytes))
-
-def transform_df(df):
-    df['datum'] = pd.to_datetime(df['datum'])
-    return df
 
 def get_diff_df(df):
     diff_df = df.diff()
@@ -75,7 +40,7 @@ def main():
     if filename := st.selectbox('Select File', csvs):
         col1, col2, col3 = st.columns(3)
 
-        col1.header(f'{filename} - Absolute')
+        col1.header(f'{filename.capitalize()} - Absolute')
         df = fetch_csv(filename)
         df = transform_df(df)
         min_dt = df['datum'].min()

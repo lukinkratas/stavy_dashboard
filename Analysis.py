@@ -3,7 +3,8 @@ import streamlit as st
 from datetime import datetime
 # import plotly.express as px
 import plotly.graph_objects as go
-from custom_utils import list_s3_csvs, fetch_csv, transform_df
+from custom_utils import s3_list_objects, s3_read_df, transform_df
+from constants import BUCKET_NAME
 
 # TODO:
 # [ ] add parquet table
@@ -31,7 +32,8 @@ def main():
     st.set_page_config(layout="wide")
     st.title('Stavy')
 
-    csvs = list_s3_csvs()
+    s3_key_names = s3_list_objects(BUCKET_NAME)
+    csvs = [key_name for key_name in  s3_key_names if key_name.endswith('csv')]
 
     if not csvs:
         st.write('Files in data directory not found.')
@@ -41,7 +43,7 @@ def main():
         col1, col2, col3 = st.columns(3)
 
         col1.header(f'{filename.capitalize()} - Absolute')
-        df = fetch_csv(filename)
+        df = s3_read_df(bucket_name=BUCKET_NAME, key_name=filename)
         df = transform_df(df)
         min_dt = df['datum'].min()
         col1.dataframe(df)

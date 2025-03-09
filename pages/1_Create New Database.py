@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
-from custom_utils import write_csv
+from custom_utils import s3_put_df
+from constants import BUCKET_NAME
 
 def create_empty_df(field_names):
     return pd.DataFrame({field_name: [] for field_name in field_names})
@@ -38,7 +39,8 @@ def main():
 
     if st.button('Create'):
         df = create_empty_df(st.session_state['field_names'])
-        write_csv(df, filename)
+        s3_put_df(df, bucket_name=BUCKET_NAME, key_name=filename, index=False)
+        del st.session_state['field_names']
         st.rerun()
 
 main()

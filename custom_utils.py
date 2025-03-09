@@ -1,47 +1,113 @@
-import boto3
-import io
-from dotenv import load_dotenv
 import pandas as pd
-import s3fs
+from functools import wraps
+import os
+import pwd
+from datetime import datetime
+from time import perf_counter
+import boto3
+from botocore.exceptions import ClientError
+from io import BytesIO, StringIO
 
-load_dotenv()
 s3_client = boto3.client('s3')
-s3_filesystem = s3fs.S3FileSystem()
-BUCKET_NAME = 'stavy'
 
-def list_s3_csvs():
+def get_username():
+    return pwd.getpwuid(os.getuid())[0]
 
-    # Get object from S3
-    response = s3_client.list_objects_v2(
-        Bucket=BUCKET_NAME,
-        MaxKeys=1,
-    )
+def track_args(func):
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+
+        print(f"{datetime.now()} {get_username()} called {func.__name__} with {args=} and {kwargs=}.")
+
+        result = func(*args, **kwargs)
+
+        print(f"{func.__name__} finished successfully.")
+
+        return result
     
-    contents = response['Contents']
-    return [content['Key'] for content in contents if content['Key']]
+    return wrapper
 
-def fetch_csv(filename):
+def track_time_performance(n=1):
 
-    # Get object from S3
-    response = s3_client.get_object(
-        Bucket=BUCKET_NAME,
-        Key=filename
-    )
+    def decorator(func):
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+
+            print(f"{func.__name__} running {n}time(s) started.")
+            start_time = perf_counter()
+
+            for _ in range(n):
+                result = func(*args, **kwargs)
+
+            elapsed_time = perf_counter() - start_time
+            print(f"{func.__name__} finished, took: {elapsed_time:0.8f} seconds.")
+
+            return result
+        
+        return wrapper
     
-    # Read the CSV data from the response
-    csv_bytes = response['Body'].read().decode('utf-8')
-    return pd.read_csv(io.StringIO(csv_bytes))
+    return decorator
+
+def s3_put_object(bytes, bucket:str, key_name:str):
+
+    try:
+        response = s3_client.put_object(
+            Body=bytes,
+            Bucket=bucket,
+            Key=key_name
+        )
+
+    except ClientError as e:
+        print(e)
+        return False
+    
+    return response
+
+def s3_put_df(df:pd.DataFrame, bucket_name:str, key_name:str, **kwargs):
+    # usual kwargs index=False
+
+    bytes = BytesIO()
+    df.to_csv(bytes, **kwargs)
+    bytes.seek(0)
+    return s3_put_object(bytes.getvalue(), bucket_name, key_name)
+
+def s3_list_objects(bucket_name:str, key_prefix:str=''):
+    
+    try:
+        response = s3_client.list_objects_v2(
+            Bucket=bucket_name,
+            Prefix=key_prefix
+        )
+
+    except ClientError as e:
+        print(e)
+        return False
+    
+    return [content.get('Key') for content in response.get('Contents')]
+
+def s3_get_object(bucket_name:str, key_name:str):
+    
+    try:
+        response = s3_client.get_object(
+            Bucket=bucket_name,
+            Key=key_name
+        )
+
+    except ClientError as e:
+        print(e)
+        return False
+    
+    return response
+
+def s3_read_df(bucket_name:str, key_name:str, **kwargs) -> pd.DataFrame:
+
+    response = s3_get_object(bucket_name, key_name)
+    bytes = BytesIO(response['Body'].read())
+    bytes.seek(0)
+    return pd.read_csv(bytes, on_bad_lines='warn', **kwargs)
 
 def transform_df(df):
     df['datum'] = pd.to_datetime(df['datum'])
     return df
-
-def write_csv(df, filename):
-
-    with s3_filesystem.open(f'{BUCKET_NAME}/{filename}', 'w') as s3_file:
-        df.to_csv(s3_file, header=True, index=False)
-
-def append_to_csv(appends_df, filename):
-
-    with s3_filesystem.open(f'{BUCKET_NAME}/{filename}', 'a') as s3_file:
-        appends_df.to_csv(s3_file, header=False, index=False)
